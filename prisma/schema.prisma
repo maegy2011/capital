@@ -1,0 +1,203 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// User model for passengers, supervisors, and admins
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  phone     String?
+  role      UserRole @default(PASSENGER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  bookings     Booking[]
+  wallets      Wallet[]
+  subscriptions Subscription[]
+  createdTrips Trip[]      @relation("SupervisorTrips")
+  
+  @@map("users")
+}
+
+// Bus model with registration and capacity details
+model Bus {
+  id           String   @id @default(cuid())
+  plateNumber  String   @unique
+  type         BusType  @default(STANDARD)
+  capacity     Int
+  photoUrl     String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  trips Trip[]
+  
+  @@map("buses")
+}
+
+// Station model for boarding points
+model Station {
+  id          String   @id @default(cuid())
+  name        String
+  address     String?
+  latitude    Float
+  longitude   Float
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  tripStations TripStation[]
+  bookings     Booking[]
+  
+  @@map("stations")
+}
+
+// Trip model for bus journeys
+model Trip {
+  id            String      @id @default(cuid())
+  busId         String
+  departureTime DateTime
+  arrivalTime   DateTime
+  status        TripStatus  @default(SCHEDULED)
+  price         Float
+  isActive      Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  // Relations
+  bus           Bus            @relation(fields: [busId], references: [id])
+  supervisorId  String?
+  supervisor    User?          @relation("SupervisorTrips", fields: [supervisorId], references: [id])
+  tripStations TripStation[]
+  bookings     Booking[]
+  
+  @@map("trips")
+}
+
+// Junction table for trips and stations (route stops)
+model TripStation {
+  id          String   @id @default(cuid())
+  tripId      String
+  stationId   String
+  stopOrder   Int
+  arrivalTime DateTime
+  departureTime DateTime
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  trip    Trip    @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  station Station @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  
+  @@unique([tripId, stationId])
+  @@map("trip_stations")
+}
+
+// Booking model for passenger reservations
+model Booking {
+  id            String        @id @default(cuid())
+  userId        String
+  tripId        String
+  stationId     String
+  seatNumber    Int?
+  status        BookingStatus @default(PENDING)
+  qrCode        String?
+  totalPrice    Float
+  paymentMethod String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  user    User    @relation(fields: [userId], references: [id])
+  trip    Trip    @relation(fields: [tripId], references: [id])
+  station Station @relation(fields: [stationId], references: [id])
+  
+  @@map("bookings")
+}
+
+// Wallet model for user funds
+model Wallet {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  balance   Float    @default(0)
+  currency  String   @default("EGP")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+  
+  @@map("wallets")
+}
+
+// Subscription model for trip packages
+model Subscription {
+  id          String           @id @default(cuid())
+  userId      String
+  type        SubscriptionType
+  tripsCount  Int?
+  validUntil  DateTime
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+  
+  @@map("subscriptions")
+}
+
+// Enums
+enum UserRole {
+  PASSENGER
+  SUPERVISOR
+  ADMIN
+}
+
+enum BusType {
+  STANDARD
+  DELUXE
+  VIP
+}
+
+enum TripStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  DELAYED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  REFUNDED
+}
+
+enum SubscriptionType {
+  TRIP_PACKAGE_5
+  TRIP_PACKAGE_10
+  TRIP_PACKAGE_20
+  WEEKLY_UNLIMITED
+  MONTHLY_UNLIMITED
+}
